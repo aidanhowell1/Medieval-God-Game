@@ -1159,7 +1159,7 @@ function updateCursorType() {
   // Check if hovering over enemy
   for (const enemy of enemies) {
     const dist = Math.hypot(enemy.x - worldMouseX, enemy.y - worldMouseY);
-    if (dist <= enemy.radius) {
+    if (dist <= enemy.radius + 10) {
       customCursor.type = 'attack';
       return;
     }
@@ -2838,7 +2838,7 @@ let isAttacking = false;
     
     for (const enemy of enemies) {
       const dist = Math.hypot(enemy.x - this.x, enemy.y - this.y);
-      if (dist < nearestDist && dist <= this.attackRange) {
+      if (dist < nearestDist && dist <= this.attackRange + this.speed) {
         nearestDist = dist;
         nearestEnemy = enemy;
       }
@@ -5147,74 +5147,79 @@ ctx.restore();
       return false;
     }
     
-    // Handle mouse clicks on canvas to select units or command movement
-	canvas.addEventListener("click", function(e) {
+	// Handle mouse clicks on canvas to select units or command movement/attack
+    canvas.addEventListener("click", function(e) {
   const rect = canvas.getBoundingClientRect();
   const mouseX = e.clientX - rect.left;
   const mouseY = e.clientY - rect.top;
-  
+
   // First check if click was on minimap
   if (isClickOnMinimap(mouseX, mouseY)) {
     handleMinimapClick(mouseX, mouseY);
     return;
   }
-  
+
   // Convert screen coordinates to world coordinates
   const worldMouseX = mouseX + camera.x;
   const worldMouseY = mouseY + camera.y;
-  
+
   // Check if in building placement mode
   if (buildingPlacementMode && selectedBuildingType) {
-  // Check if we can afford the building
-  const cost = buildingCosts[selectedBuildingType];
-  if (resources.wood >= cost.wood && resources.stone >= cost.stone) {
-    // Check if location is valid
-    let canBuild = isInTerritory(worldMouseX, worldMouseY);
-    
-    if (canBuild) {
-      for (const building of buildings) {
-        const dist = Math.hypot(building.x - worldMouseX, building.y - worldMouseY);
-        if (dist < 100) {
-          canBuild = false;
-          break;
+    // Check if we can afford the building
+    const cost = buildingCosts[selectedBuildingType];
+    if (resources.wood >= cost.wood && resources.stone >= cost.stone) {
+      // Check if location is valid
+      let canBuild = isInTerritory(worldMouseX, worldMouseY);
+
+      if (canBuild) {
+        for (const building of buildings) {
+          const dist = Math.hypot(building.x - worldMouseX, building.y - worldMouseY);
+          if (dist < 100) {
+            canBuild = false;
+            break;
+          }
         }
       }
-    }
-    
-    if (canBuild) {
-      // Store the planned building data in the builder
-      if (selectedUnit && selectedUnit.type === 'builder') {
-        selectedUnit.plannedBuilding = {
-          x: worldMouseX,
-          y: worldMouseY,
-          type: selectedBuildingType
-        };
-        selectedUnit.targetX = worldMouseX;
-        selectedUnit.targetY = worldMouseY;
-        
-        // Create placement particles
-        for (let i = 0; i < 10; i++) {
-          particles.push(new Particle(worldMouseX, worldMouseY, 'sparkle'));
+
+      if (canBuild) {
+        // Store the planned building data in the builder
+        if (selectedUnit && selectedUnit.type === 'builder') {
+          selectedUnit.plannedBuilding = {
+            x: worldMouseX,
+            y: worldMouseY,
+            type: selectedBuildingType
+          };
+          selectedUnit.targetX = worldMouseX;
+          selectedUnit.targetY = worldMouseY;
+
+          // Create placement particles
+          for (let i = 0; i < 10; i++) {
+            particles.push(new Particle(worldMouseX, worldMouseY, 'sparkle'));
+          }
         }
+
+        // Exit building placement mode
+        buildingPlacementMode = false;
+        selectedBuildingType = null;
+        customCursor.type = 'default';
+        document.getElementById('buildingMenu').classList.add('hidden');
+      } else {
+        showQuestNotification(
+          "Cannot build here! Must be within your territory and not too close to other buildings."
+        );
       }
-      
-      // Exit building placement mode
-      buildingPlacementMode = false;
-      selectedBuildingType = null;
-	  customCursor.type = 'default';
-      document.getElementById('buildingMenu').classList.add('hidden');
     } else {
-      showQuestNotification("Cannot build here! Must be within your territory and not too close to other buildings.");
+      showQuestNotification(
+        `Not enough resources! Need ${cost.wood} wood and ${cost.stone} stone.`
+      );
     }
-  } else {
-    showQuestNotification(`Not enough resources! Need ${cost.wood} wood and ${cost.stone} stone.`);
+    return;
   }
-  return;
-}
+
   // Check if clicked on a unit (with improved selection logic)
   let clickedUnit = null;
   let closestUnitDist = Infinity;
-  
+
   // First, check all units to find the closest one to the click
   for (let unit of units) {
     const dist = Math.hypot(unit.x - worldMouseX, unit.y - worldMouseY);
@@ -5223,40 +5228,70 @@ ctx.restore();
       closestUnitDist = dist;
     }
   }
-  
+
   if (clickedUnit) {
     // Select the unit
     if (selectedUnit) {
       selectedUnit.selected = false;
     }
-    
+
     if (selectedBuilding) {
       selectedBuilding.selected = false;
       selectedBuilding = null;
     }
-    
+
     selectedUnit = clickedUnit;
     selectedUnit.selected = true;
-    
-    if (clickedUnit.type === 'warrior' || clickedUnit.type === 'archer' || clickedUnit.type === 'knight') {
+
+    if (
+      clickedUnit.type === 'warrior' ||
+      clickedUnit.type === 'archer' ||
+      clickedUnit.type === 'knight'
+    ) {
       triggerShake(10, 4);
     }
-    
+
     updateUnitInfo();
-    
+
     // Selection particles
     for (let i = 0; i < 10; i++) {
       const angle = Math.random() * Math.PI * 2;
       const dist = Math.random() * selectedUnit.radius;
-      particles.push(new Particle(
-        selectedUnit.x + Math.cos(angle) * dist,
-        selectedUnit.y + Math.sin(angle) * dist,
-        'sparkle'
-      ));
+      particles.push(
+        new Particle(
+          selectedUnit.x + Math.cos(angle) * dist,
+          selectedUnit.y + Math.sin(angle) * dist,
+          'sparkle'
+        )
+      );
     }
     return;
   }
-  
+
+  // --- New enemy-click detection block ---
+  // If a combat unit is selected, check if click is on an enemy before selecting a building.
+  if (selectedUnit && selectedUnit.type !== 'worker') {
+    let clickedEnemy = null;
+    let closestEnemyDist = Infinity;
+    for (const enemy of enemies) {
+      const dist = Math.hypot(enemy.x - worldMouseX, enemy.y - worldMouseY);
+      // Consider the enemy clicked if within its radius (add a small buffer if needed)
+      if (dist <= enemy.radius && dist < closestEnemyDist) {
+      clickedEnemy = enemy;
+      closestEnemyDist = dist;
+      }
+    }
+    if (clickedEnemy) {
+      // Set target coordinates to the enemy’s position so the unit will chase and attack
+      selectedUnit.targetX = clickedEnemy.x;
+      selectedUnit.targetY = clickedEnemy.y;
+      // Add a movement marker for visual feedback
+      movementMarkers.push(new MovementMarker(clickedEnemy.x, clickedEnemy.y));
+      return; // Skip building selection
+    }
+  }
+  // --- End of enemy-click detection block ---
+
   // If no unit was clicked, check for buildings
   let clickedBuilding = null;
   for (let building of buildings) {
@@ -5266,35 +5301,37 @@ ctx.restore();
       break;
     }
   }
-  
+
   if (clickedBuilding) {
     // Select building
     if (selectedUnit) {
       selectedUnit.selected = false;
       selectedUnit = null;
     }
-    
+
     if (selectedBuilding) {
       selectedBuilding.selected = false;
     }
-    
+
     selectedBuilding = clickedBuilding;
     selectedBuilding.selected = true;
     updateBuildingInfo();
-    
+
     // Selection particles
     for (let i = 0; i < 10; i++) {
       const angle = Math.random() * Math.PI * 2;
       const dist = Math.random() * Math.max(selectedBuilding.width, selectedBuilding.height) / 2;
-      particles.push(new Particle(
-        selectedBuilding.x + Math.cos(angle) * dist,
-        selectedBuilding.y + Math.sin(angle) * dist,
-        'sparkle'
-      ));
+      particles.push(
+        new Particle(
+          selectedBuilding.x + Math.cos(angle) * dist,
+          selectedBuilding.y + Math.sin(angle) * dist,
+          'sparkle'
+        )
+      );
     }
     return;
   }
-  
+
   // Check if clicked on a resource node
   let clickedResource = null;
   for (let resource of resourceNodes) {
@@ -5304,7 +5341,7 @@ ctx.restore();
       break;
     }
   }
-  
+
   if (clickedResource && selectedUnit && selectedUnit.type === 'worker') {
     // Command worker to gather resource
     selectedUnit.targetResource = clickedResource;
@@ -5312,41 +5349,45 @@ ctx.restore();
     selectedUnit.targetY = clickedResource.y;
     selectedUnit.state = 'moving_to_resource';
     selectedUnit.currentLoad = { wood: 0, stone: 0, food: 0 };
-    
+
     // Add movement marker
     movementMarkers.push(new MovementMarker(worldMouseX, worldMouseY));
-    
+
     // Add particles
     for (let i = 0; i < 5; i++) {
-      particles.push(new Particle(
-        worldMouseX + (Math.random() - 0.5) * 20,
-        worldMouseY + (Math.random() - 0.5) * 20,
-        'sparkle'
-      ));
+      particles.push(
+        new Particle(
+          worldMouseX + (Math.random() - 0.5) * 20,
+          worldMouseY + (Math.random() - 0.5) * 20,
+          'sparkle'
+        )
+      );
     }
-    
+
     updateUnitInfo();
     return;
   }
-  
+
   // Command selected unit to move (if not a worker)
   if (selectedUnit && selectedUnit.type !== 'worker') {
     selectedUnit.targetX = worldMouseX;
     selectedUnit.targetY = worldMouseY;
-    
+
     // Add movement marker and particles
     movementMarkers.push(new MovementMarker(worldMouseX, worldMouseY));
     for (let i = 0; i < 8; i++) {
-      particles.push(new Particle(
-        worldMouseX + (Math.random() - 0.5) * 20,
-        worldMouseY + (Math.random() - 0.5) * 20,
-        'sparkle'
-      ));
+      particles.push(
+        new Particle(
+          worldMouseX + (Math.random() - 0.5) * 20,
+          worldMouseY + (Math.random() - 0.5) * 20,
+          'sparkle'
+        )
+      );
     }
-    
+
     updateUnitInfo();
   }
-});   
+});
     
 	// Right click to deselect unit/building or cancel building placement
     canvas.addEventListener("contextmenu", function(e) {
