@@ -640,11 +640,13 @@ html {
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
     // Resize canvas to fill the viewport
-    function resizeCanvas() {
+    
+	function resizeCanvas() {
       canvas.width = window.innerWidth;
       canvas.height = window.innerHeight;
     }
-    window.addEventListener("resize", resizeCanvas);
+    
+	window.addEventListener("resize", resizeCanvas);
     resizeCanvas();
     // Define huge world dimensions
     const worldWidth = 3000;
@@ -1237,29 +1239,54 @@ function drawDefaultCursor() {
 }
 
 function drawBuildCursor() {
-  const size = 16;
-  const x = customCursor.x;
-  const y = customCursor.y;
-  
-  // Hammer design
-  ctx.strokeStyle = '#f59e0b';
-  ctx.fillStyle = '#78350f';
-  ctx.lineWidth = 2;
-  
-  // Handle
-  ctx.fillRect(x - 2, y - size/2, 4, size);
-  
-  // Head
-  ctx.fillRect(x - size/2, y - size/2, size, size/3);
-  
-  // Outline
-  ctx.strokeRect(x - size/2, y - size/2, size, size/3);
-  
-  // Glow effect
+  const size = 20;
+  const { x, y } = customCursor;
+
+  ctx.save();
+
+  // Shadow glow
   ctx.shadowBlur = 15;
   ctx.shadowColor = 'rgba(245, 158, 11, 0.6)';
-  ctx.strokeRect(x - size/2, y - size/2, size, size/3);
+
+  // Handle
+  ctx.fillStyle = '#8B4513'; // richer brown
+  ctx.strokeStyle = '#5a2d0c';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(x - 3, y - size / 2, 6, size, 2);
+  ctx.fill();
+  ctx.stroke();
+
+  // Hammer head (metallic look)
+  const headW = size;
+  const headH = size / 3;
+  const headX = x - headW / 2;
+  const headY = y - size / 2;
+
+  const grad = ctx.createLinearGradient(headX, headY, headX + headW, headY + headH);
+  grad.addColorStop(0, '#d4af37');
+  grad.addColorStop(0.5, '#facc15');
+  grad.addColorStop(1, '#d97706');
+
+  ctx.fillStyle = grad;
+  ctx.strokeStyle = '#78350f';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.roundRect(headX, headY, headW, headH, 3);
+  ctx.fill();
+  ctx.stroke();
+
+  // Small highlight line on the head
+  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
+  ctx.beginPath();
+  ctx.moveTo(headX + 3, headY + 3);
+  ctx.lineTo(headX + headW - 3, headY + 3);
+  ctx.stroke();
+
+  // Reset glow
   ctx.shadowBlur = 0;
+
+  ctx.restore();
 }
 
 function drawAttackCursor() {
@@ -6374,7 +6401,7 @@ overlayStyle.textContent = `
 `;
 document.head.appendChild(overlayStyle);
 
-function updateDayNightCycle() {
+	function updateDayNightCycle() {
   // Slower cycle - 3600 frames = 60 seconds at 60fps
   const cycleLength = 3600;
   dayNightCycle = (dayNightCycle + 1) % cycleLength;
@@ -6459,7 +6486,7 @@ function updateDayNightCycle() {
   }
 }
     
-function gameLoop() {
+	function gameLoop() {
   globalTime++;
   
   // Update day/night cycle
@@ -6470,7 +6497,7 @@ function gameLoop() {
   requestAnimationFrame(gameLoop);
 }
     
-function update() {
+	function update() {
   // Update units
   units.forEach(unit => unit.update());
   
@@ -6671,12 +6698,17 @@ function update() {
     // Mouse position tracking for building placement
     let mouseX = 0;
     let mouseY = 0;
-    canvas.addEventListener('mousemove', function(e) {
+    
+	canvas.addEventListener('mousemove', function(e) {
       const rect = canvas.getBoundingClientRect();
       mouseX = e.clientX - rect.left;
       mouseY = e.clientY - rect.top;
     });
     
+	canvas.addEventListener("mouseleave", () => {
+  mousePos = null;
+})
+	
     function draw() {
       // Clear the entire canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -6833,7 +6865,7 @@ if (
   ctx.restore();
 }
     
-function drawDayNightIndicator() {
+	function drawDayNightIndicator() {
   const indicatorSize = 30;
   const x = canvas.width / 2;
   const y = 30;
@@ -6919,9 +6951,8 @@ function drawDayNightIndicator() {
   
   ctx.restore();
 }
-
-    
-function drawMinimap() {
+ 
+	function drawMinimap() {
   const minimapWidth = 200;
   const minimapHeight = 200;
   const minimapX = canvas.width - minimapWidth - 10;
@@ -7325,15 +7356,15 @@ function drawMinimap() {
     init();
     gameLoop();
 	// Prevent zooming with mouse wheel
-document.addEventListener('wheel', function(e) {
+	document.addEventListener('wheel', function(e) {
   if (e.ctrlKey) {
     e.preventDefault();
   }
 }, { passive: false });
 
 // Prevent pinch-to-zoom on touch devices
-let lastTouchEnd = 0;
-document.addEventListener('touchend', function(event) {
+	let lastTouchEnd = 0;
+	document.addEventListener('touchend', function(event) {
   const now = Date.now();
   if (now - lastTouchEnd <= 300) {
     event.preventDefault();
@@ -7342,20 +7373,20 @@ document.addEventListener('touchend', function(event) {
 }, false);
 
 // Prevent double-tap to zoom
-let lastTouchStart = 0;
-document.addEventListener('touchstart', function(event) {
+	let lastTouchStart = 0;
+	document.addEventListener('touchstart', function(event) {
   if (event.touches.length > 1) {
     event.preventDefault();
   }
   lastTouchStart = Date.now();
 }, false);
 
-document.addEventListener('touchmove', function(event) {
+	document.addEventListener('touchmove', function(event) {
   if (event.touches.length > 1) {
     event.preventDefault();
   }
 }, false);
-const buildingDetails = {
+	const buildingDetails = {
   house: {
     name: "House",
     cost: { wood: 30, stone: 10 },
@@ -7395,7 +7426,7 @@ const buildingDetails = {
 };
 
 // Add this function to update the UI with building details
-function updateBuildingMenuInfo(buildingType) {
+	function updateBuildingMenuInfo(buildingType) {
   const infoDiv = document.getElementById("unitInfo");
   const details = buildingDetails[buildingType];
   
@@ -7448,7 +7479,7 @@ function updateBuildingMenuInfo(buildingType) {
 }
 
 // Add this function to restore the builder's normal info display
-function restoreBuilderInfo() {
+	function restoreBuilderInfo() {
   updateUnitInfo(); // This will show the normal builder info
 }
   </script>
